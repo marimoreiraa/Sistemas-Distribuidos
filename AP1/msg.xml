@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dados>
+    <nome>Aluno 5</nome>
+    <idade>23</idade>
+    <CPF>456789123</CPF>
+    <mensagem>Arquivo XML do Aluno 5</mensagem>
+</dados>

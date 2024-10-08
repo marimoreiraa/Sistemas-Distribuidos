@@ -1,0 +1,4 @@
+nome = "Aluno 1"
+idade = 20
+CPF = 12345678
+mensagem = "Arquivo TOML do Aluno 1"
