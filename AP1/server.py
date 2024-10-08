@@ -1,68 +1,56 @@
 import socket
 import json
+import csv
 import xml.etree.ElementTree as ET
 import yaml
 import toml
-import csv
 
-def handle_client(conn, client):
-    print(f"\nConectado com: {client}")
-    while True:
-        data = conn.recv(1024)
-        if not data:
-            break
-        
-        # Processar dados em cada formato
-        # JSON
-        try:
-            data_json = json.loads(data)
-            print("JSON:", data_json)
-        except json.JSONDecodeError as e:
-            print(f"Erro ao decodificar JSON:{e}")
 
-        # XML
-        try:
-            root = ET.fromstring(data)
-            print("XML:")
-            for child in root:
-                print(child.tag, child.text)
-        except ET.ParseError as e:
-            print(f"Erro ao analisar XML:{e}")
+# Função para tratar as mensagens recebidas
+def process_message(message, format_type):
+    if format_type == "json":
+        data = json.loads(message)
+    elif format_type == "csv":
+        reader = csv.reader([message])
+        data = {
+            key: value
+            for key, value in zip(["Nome", "CPF", "idade", "mensagem"], next(reader))
+        }
+    elif format_type == "xml":
+        root = ET.fromstring(message)
+        data = {child.tag: child.text for child in root}
+    elif format_type == "yaml":
+        data = yaml.safe_load(message)
+    elif format_type == "toml":
+        data = toml.loads(message)
+    else:
+        data = {}
+    return data
 
-        # YAML
-        try:
-            data_yaml = yaml.safe_load(data)
-            print("YAML:", data_yaml)
-        except yaml.YAMLError as e:
-            print(f"Erro ao carregar YAML: {e}")
 
-        # TOML
-        try:
-            data_toml = toml.loads(data.decode('utf-8'))
-            print("TOML:", data_toml)
-        except (toml.TomlDecodeError, UnicodeDecodeError) as e:
-            print(f"Erro ao decodificar TOML: {e}")
+# Configurações do servidor
+HOST = "localhost"
+PORT = 12345
 
-        # CSV
-        try:
-            reader = csv.reader([data.decode('utf-8')], delimiter=',')  # Ajustar o delimitador se necessário
-            for row in reader:
-                nome, cpf, idade, mensagem = row
-                print("CSV:", nome, cpf, idade, mensagem)
-        except csv.Error as e:
-            print(f"Erro ao analisar CSV: {e}") 
+# Inicia o servidor
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+    server_socket.bind((HOST, PORT))
+    server_socket.listen()
 
-    conn.close()
-    print(f"Conexão encerrada")
+    print("Servidor aguardando conexão...")
+    conn, addr = server_socket.accept()
+    with conn:
+        print(f"Conectado por {addr}")
 
-host = "127.0.0.1"  # Endereço IP do servidor (localhost)
-port = 5001  # Porta onde o servidor estará escutando
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-origin = (host, port)
-sock.bind(origin)
-sock.listen(0)
-print("\nServidor iniciado e aguardando conexões...")
+        for _ in range(5):  # Receber 5 mensagens, uma de cada formato
+            format_type = conn.recv(1024).decode()  # Recebe o tipo de formato
+            message = conn.recv(4096).decode()  # Recebe a mensagem serializada
 
-while True:
-    conn, client = sock.accept()
-    handle_client(conn,client)
+            # Exibe a mensagem crua recebida antes de desserializar
+            print(f"\nMensagem recebida no formato {format_type}:")
+            print(message)
+
+            # Processa e exibe a mensagem desserializada
+            data = process_message(message, format_type)
+            print(f"\nDados processados ({format_type}):")
+            print(data)

@@ -1,53 +1,89 @@
 import socket
 import json
+import csv
 import xml.etree.ElementTree as ET
 import yaml
 import toml
-import csv
+import time
 
-def client_task():
-    host = "127.0.0.1"  # Endereço IP do servidor (localhost)
-    port = 5001        # Porta onde o servidor estará escutando
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    try:
-        sock.connect((host, port))
-        
-        # Dados a serem enviados
-        data = {
-            "Nome": "Mariana",
-            "CPF": 12345678,
-            "idade": 23,
-            "mensagem": "Esta e uma mensagem de teste"
-        }
-        
-        # Enviar em diferentes formats
-        for format in ['json', 'xml', 'yaml', 'toml', 'csv']:
-            if format == 'json':
-                message = json.dumps(data).encode('utf-8')
-            elif format == 'xml':
-                root = ET.Element("Nome")
-                for key, val in data.items():
-                    ET.SubElement(root, key).text = str(val)
-                message = ET.tostring(root)
-            elif format == 'yaml':
-                message = yaml.dump(data).encode('utf-8')
-            elif format == 'toml':
-                message = toml.dumps(data).encode('utf-8')
-            elif format == 'csv':
-                csv_data = [data.values()]
-                csv_string = ""
-                for row in csv_data:
-                    csv_string += ",".join(map(str, row)) + "\n"
-                message = csv_string.encode('utf-8')
 
-            sock.sendall(message)
-            print(message)
-            print(f"Mensagem no formato {format} enviada!")
-    
-    finally:
-        sock.close()
-        print(f"Conexão encerrada")
+# Funções para serialização
+def serialize_to_json():
+    with open("AP1/msg.json", "r") as file:
+        data=file.read(1024)
+        file.close()
+    return json.dumps(data)
 
-client_task()
 
+def serialize_to_csv():
+    with open("AP1/msg.csv", "r") as file:
+        data=file.read(1024)
+        file.close()
+    # csv_data = ",".join([str(value) for value in data.values()])
+    return data
+
+
+def serialize_to_xml():
+    with open("AP1/msg.xml", "r") as file:
+        data=file.read(1024)
+        file.close()
+    # root = ET.Element("dados")
+    # for key, value in data.items():
+    #     child = ET.SubElement(root, key)
+    #     child.text = str(value)
+    # return ET.tostring(root).decode()
+    return data
+
+
+def serialize_to_yaml():
+    with open("AP1/msg.yaml", "r") as file:
+        data=file.read(1024)
+        file.close()
+    # return yaml.dump()
+    return data
+
+
+def serialize_to_toml():
+    with open("AP1/msg.toml", "r") as file:
+        data=file.read(1024)
+        file.close()
+    # return toml.dumps()
+    return data
+
+
+# Configurações do cliente
+HOST = "localhost"
+PORT = 12345
+
+# Serializa os dados nos 5 formatos
+formats = {
+    "json": serialize_to_json(),
+    "csv": serialize_to_csv(),
+    "xml": serialize_to_xml(),
+    "yaml": serialize_to_yaml(),
+    "toml": serialize_to_toml(),
+}
+
+# Envia as mensagens para o servidor
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+    client_socket.connect((HOST, PORT))
+
+    for format_type, message in formats.items():
+        # Imprime o tipo de formato e a mensagem antes de enviar
+        print(f"\nEnviando dados no formato: {format_type}")
+        print(f"Mensagem serializada ({format_type}):")
+        print(message)  # Mensagem serializada que será enviada
+
+        # Envia o tipo de formato
+        client_socket.sendall(format_type.encode())
+        print(f"Tipo de formato '{format_type}' enviado.")
+
+        time.sleep(1)  # Delay para garantir que o servidor processe o formato
+
+        # Envia a mensagem serializada
+        client_socket.sendall(message.encode())
+        print(f"Mensagem no formato '{format_type}' enviada.")
+
+        time.sleep(1)  # Delay para garantir que o servidor processe a mensagem
+
+print("Todas as mensagens foram enviadas.")
