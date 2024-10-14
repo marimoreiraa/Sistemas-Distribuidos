@@ -1,56 +1,35 @@
 import socket
 import json
-import csv
-import xml.etree.ElementTree as ET
-import yaml
-import toml
+import os
 
+def salvar_em_arquivo(dados, formato):
+    diretorio = "AP1"
+    if not os.path.exists(diretorio):
+        os.makedirs(diretorio)
+    nome_arquivo = os.path.join(diretorio, f"mensagem.{formato}")
+    with open(nome_arquivo, 'w') as arquivo:
+        arquivo.write(dados)
+    print(f"Salvou dados no formato {formato} em {nome_arquivo}")
 
-# Função para tratar as mensagens recebidas
-def process_message(message, format_type):
-    if format_type == "json":
-        data = json.loads(message)
-    elif format_type == "csv":
-        reader = csv.reader([message])
-        data = {
-            key: value
-            for key, value in zip(["Nome", "CPF", "idade", "mensagem"], next(reader))
-        }
-    elif format_type == "xml":
-        root = ET.fromstring(message)
-        data = {child.tag: child.text for child in root}
-    elif format_type == "yaml":
-        data = yaml.safe_load(message)
-    elif format_type == "toml":
-        data = toml.loads(message)
-    else:
-        data = {}
-    return data
+def main():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('localhost', 65432))
+        s.listen()
+        print("Servidor está ouvindo na porta 65432...\n")
+        conn, addr = s.accept()
+        with conn:
+            print(f"Conectado por {addr}")
+            dados = conn.recv(1024)
+            if not dados:
+                print("Nenhum dado recebido.")
+                return
+            print("Dados recebidos do cliente.\n")
+            recebidos = json.loads(dados.decode('utf-8'))
+            
+            for formato, mensagem in recebidos.items():
+                print(f"Salvando dados no formato {formato}...")
+                salvar_em_arquivo(mensagem, formato)
+                print(f"Dados salvos no formato {formato}.\n")
 
-
-# Configurações do servidor
-HOST = "localhost"
-PORT = 12345
-
-# Inicia o servidor
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-    server_socket.bind((HOST, PORT))
-    server_socket.listen()
-
-    print("Servidor aguardando conexão...")
-    conn, addr = server_socket.accept()
-    with conn:
-        print(f"Conectado por {addr}")
-
-        for _ in range(5):  # Receber 5 mensagens, uma de cada formato
-            format_type = conn.recv(1024).decode()  # Recebe o tipo de formato
-            message = conn.recv(4096).decode()  # Recebe a mensagem serializada
-
-            # Exibe a mensagem crua recebida antes de desserializar
-            print(f"\nMensagem recebida no formato {format_type}:")
-            print(message)
-
-            # Processa e exibe a mensagem desserializada
-            data = process_message(message, format_type)
-            print(f"\nDados processados ({format_type}):")
-            print(data)
+if __name__ == "__main__":
+    main()
