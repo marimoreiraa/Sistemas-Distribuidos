@@ -1,30 +1,36 @@
-# simulator device 1 for mqtt message publishing
+import sys
 import paho.mqtt.client as paho
 import time
-import random
 
-# hostname
-broker = "localhost"
-# port
-port = 1883
+broker = "localhost"  # Endereço do broker MQTT
+port = 1883  # Porta padrão para MQTT
+
+device_id = "dispositivo_1"  # Identificação do dispositivo (deve ser modificado em cada máquina)
 
 
+# Callback chamado após publicar uma mensagem
 def on_publish(client, userdata, result):
-    print("Dispositivo 1: Dados Publicados.")
-    pass
+    print(f"{device_id}: Movimento publicado.")
+    pass  # Não realiza nenhuma ação adicional além de exibir a mensagem
 
 
-client = paho.Client("admin")
-client.on_publish = on_publish
-client.connect(broker, port)
+# Configuração do cliente MQTT
+client = paho.Client(device_id)  # Cria o cliente com o ID do dispositivo
+client.on_publish = on_publish  # Define a função de callback para publicação
+client.connect(broker, port)  # Conecta ao broker MQTT
 
-for i in range(20):
-    d = random.randint(1, 5)
+# Verifica se uma direção foi passada como argumento
+if len(sys.argv) > 1:
+    direction = sys.argv[1]  # Pega a direção do argumento
 
-    # criando mensagem
-    message = "Dispositivo 1 : Dados " + str(i)
-    time.sleep(d)
+    # Cria a mensagem com o ID do dispositivo e a direção
+    message = f"{device_id}: {direction}"
+    time.sleep(0.1)  # Pausa antes de publicar
 
-    # publicando mensagem
-    ret = client.publish("/data", message)
-print("Parou...")
+    # Publica a mensagem no tópico do jogo
+    client.publish("game/move", message)
+
+# Pausa para evitar sobrecarga de mensagens
+time.sleep(0.1)
+
+print("\nParou...")  # Indica que o processo foi encerrado
