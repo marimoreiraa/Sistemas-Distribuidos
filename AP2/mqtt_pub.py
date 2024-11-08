@@ -8,13 +8,14 @@ class MQTTPublisher:
         self.client.connect(broker, port)
         self.topic = topic
 
-    def publish(self, player_id, x, y, direction,color):
+    def publish(self, player_id, x, y, direction,color,time):
 
         message = {
             "player_id": player_id,
             "x": x,
             "y": y,
             "direction": direction,
-            "color": color
+            "color": color,
+            "time": time
         }
         self.client.publish(self.topic, json.dumps(message))

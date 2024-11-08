@@ -1,3 +1,4 @@
+from queue import Queue
 import turtle
 import time
 import random
@@ -13,13 +14,15 @@ high_score = 0
 
 # Set up the screen
 wn = turtle.Screen()
-wn.title("Move Game by @Garrocho")
+wn.title("Move Game by Gaby and Mariana")
 wn.bgcolor("gray")
 wn.setup(width=600, height=600, startx=None, starty=None)
 wn.tracer(0) # Turns off the screen updates
 
 players = {}  # Dicionário para armazenar os jogadores (outros)
 last_position = (0, 0)  # Para verificar se a posição do jogador mudou
+# Queue for storing messages from the subscriber
+message_queue = Queue()
 
 # Função para criar um jogador (bola)
 def create_player(color):
@@ -29,28 +32,39 @@ def create_player(color):
     player.color(color)
     player.penup()
     player.id = random.randint(1000, 9999)  # Gerar ID único para o jogador
+    player.time = time.time()
+    player.goto(0,0)
+    player.direction = "stop"
     return player
+
+def create_text():
+    text = turtle.Turtle()
+    text.color("black")
+    text.penup()
+    text.hideturtle()
+    return text
 
 # Definindo o jogador principal (bola do jogador)
 head_color = random.choice(["red", "blue", "green", "yellow", "purple", "black","pink","orange"])  # Cor aleatória
 head = create_player(head_color)
-head.goto(0, 0)
-head.direction = "stop"
+text = create_text()
 
 def update_players(message):
     global last_position
-    if (message["x"], message["y"]) != last_position:
-        last_position = (message["x"], message["y"])
-        players[message["player_id"]] = message
+    print(f"Update player: {message}")
+    player_id = message["player_id"]
+    print(f"Players: {players}")
+    if player_id in players:
+        # Update existing player if position changed
+        if (message["x"], message["y"]) != last_position:
+            last_position = (message["x"], message["y"])
+            players[player_id].goto(message["x"], message["y"])  # Update position directly
     else:
-       for player_id, player_data in players.items():
-            color = player_data["color"]
-            print(f"Adicionando jogador {player_id} com cor {color}")
-            new_player = create_player(color)
-            new_player.goto(player_data["x"], player_data["y"])
-            
-
-
+        # Add new player if not already present
+        players[player_id] = create_player(message["color"])
+        players[player_id].goto(message["x"], message["y"])
+        players[player_id].showturtle()
+        
 # Functions
 def go_up():
     head.direction = "up"
@@ -71,27 +85,34 @@ def close():
     wn.bye()
 
 def move(pub):
+    move_time = time.time()
+    head.time = move_time
+
+    text.clear()
+    text.goto(head.xcor(), head.ycor() + 10)  # Posicionar o texto acima do círculo
+    text.write(head.id, align="center", font=("Arial", 12, "normal"))
+
     if head.direction == "up":
         y = head.ycor()
         head.sety(y + 2)
-        pub.publish(head.id,  head.xcor(), head.ycor(),head.direction,head.color()[0]) 
+        pub.publish(head.id,  head.xcor(), head.ycor(),head.direction,head.color()[0],move_time) 
 
     if head.direction == "down":
         y = head.ycor()
         head.sety(y - 2)
-        pub.publish(head.id, head.xcor(), head.ycor(),head.direction,head.color()[0]) 
+        pub.publish(head.id, head.xcor(), head.ycor(),head.direction,head.color()[0],move_time) 
 
 
     if head.direction == "left":
         x = head.xcor()
         head.setx(x - 2)
-        pub.publish(head.id, head.xcor(), head.ycor(),head.direction,head.color()[0]) 
+        pub.publish(head.id, head.xcor(), head.ycor(),head.direction,head.color()[0],move_time) 
 
 
     if head.direction == "right":
         x = head.xcor()
         head.setx(x + 2)
-        pub.publish(head.id,  head.xcor(), head.ycor(),head.direction,head.color()[0]) 
+        pub.publish(head.id,  head.xcor(), head.ycor(),head.direction,head.color()[0],move_time) 
 
 
 # Keyboard bindings
@@ -108,22 +129,25 @@ def main():
     port = 1883  # Porta padrão para MQTT
     topic = "game/move"
 
+    global head
     actual_player_id = head.id
 
     pub = mqtt_pub.MQTTPublisher(broker,port,topic)
-    sub = mqtt_sub.MQTTSubscriber(broker,port,topic,actual_player_id)
+    sub = mqtt_sub.MQTTSubscriber(broker,port,topic,actual_player_id,message_queue)
 
     sub_thread = threading.Thread(target=sub.start)
     sub_thread.start()
     
-
-    # Main game loop
     while True:
         wn.update()
         move(pub)
+        # Check for messages in the queue
+        if not message_queue.empty():
+            message = message_queue.get()
+            update_players(message)
+
         time.sleep(delay)
 
-    wn.mainloop()
 
 if __name__ == '__main__':
     main()
