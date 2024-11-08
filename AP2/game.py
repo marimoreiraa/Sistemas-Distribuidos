@@ -1,99 +1,129 @@
 import turtle
 import time
-import subprocess
+import random
+import mqtt_pub
+import mqtt_sub
+import threading
 
-delay = 0.01  # Intervalo para o movimento
+delay = 0.01
 
-# Configuração da tela do jogo
+# Score
+score = 0
+high_score = 0
+
+# Set up the screen
 wn = turtle.Screen()
-wn.title("Move Game by Gabrielle Fonseca and Mariana Moreira")  # Título da janela
-wn.bgcolor("grey")  # Cor de fundo da janela
-wn.setup(width=1.0, height=1.0, startx=None, starty=None)  # Ajuste da tela
-wn.tracer(0)  # Desativa atualização automática da tela
+wn.title("Move Game by @Garrocho")
+wn.bgcolor("gray")
+wn.setup(width=600, height=600, startx=None, starty=None)
+wn.tracer(0) # Turns off the screen updates
 
-# Definindo os limites da tela com buffer para evitar colisão direta nas bordas
-BORDER_LEFT = -wn.window_width() / 2 + 10
-BORDER_RIGHT = wn.window_width() / 2 - 20
-BORDER_TOP = wn.window_height() / 2 - 10
-BORDER_BOTTOM = -wn.window_height() / 2 + 20
+players = {}  # Dicionário para armazenar os jogadores (outros)
+last_position = (0, 0)  # Para verificar se a posição do jogador mudou
 
-# Jogador principal (a "bola" que se move)
-head = turtle.Turtle()
-head.speed(0)  # Velocidade do movimento (0 = mais rápido)
-head.shape("circle")  # Forma da "bola"
-head.color("red")  # Cor da "bola"
-head.penup()  # Desativa o rastreamento (não desenha linha)
-head.goto(0, 0)  # Posição inicial
-head.direction = "stop"  # Direção inicial da "bola"
+# Função para criar um jogador (bola)
+def create_player(color):
+    player = turtle.Turtle()
+    player.speed(0)
+    player.shape("circle")
+    player.color(color)
+    player.penup()
+    player.id = random.randint(1000, 9999)  # Gerar ID único para o jogador
+    return player
 
-movimentos_recebidos = []  # Lista para armazenar os movimentos de outros jogadores
+# Definindo o jogador principal (bola do jogador)
+head_color = random.choice(["red", "blue", "green", "yellow", "purple", "black","pink","orange"])  # Cor aleatória
+head = create_player(head_color)
+head.goto(0, 0)
+head.direction = "stop"
+
+def update_players(message):
+    global last_position
+    if (message["x"], message["y"]) != last_position:
+        last_position = (message["x"], message["y"])
+        players[message["player_id"]] = message
+    else:
+       for player_id, player_data in players.items():
+            color = player_data["color"]
+            print(f"Adicionando jogador {player_id} com cor {color}")
+            new_player = create_player(color)
+            new_player.goto(player_data["x"], player_data["y"])
+            
 
 
-# Funções para controle de movimento e publicação no MQTT
+# Functions
 def go_up():
-    head.direction = "up"  # Define a direção
-    subprocess.Popen(
-        ["python3", "pub.py", "up"]
-    )  # Envia o comando para o servidor MQTT
-
+    head.direction = "up"
 
 def go_down():
     head.direction = "down"
-    subprocess.Popen(["python3", "pub.py", "down"])
-
 
 def go_left():
     head.direction = "left"
-    subprocess.Popen(["python3", "pub.py", "left"])
-
 
 def go_right():
     head.direction = "right"
-    subprocess.Popen(["python3", "pub.py", "right"])
 
+def stop():
+    head.direction = "stop"
 
 def close():
-    wn.bye()  # Fecha a janela do jogo quando pressionar 'Escape'
+    wn.bye()
+
+def move(pub):
+    if head.direction == "up":
+        y = head.ycor()
+        head.sety(y + 2)
+        pub.publish(head.id,  head.xcor(), head.ycor(),head.direction,head.color()[0]) 
+
+    if head.direction == "down":
+        y = head.ycor()
+        head.sety(y - 2)
+        pub.publish(head.id, head.xcor(), head.ycor(),head.direction,head.color()[0]) 
 
 
-# Função para mover a bola
-def move():
-    # Movimentos locais do jogador, respeitando os limites da tela
-    if head.direction == "up" and head.ycor() < BORDER_TOP:
-        head.sety(head.ycor() + 2)  # Move para cima
-    elif head.direction == "down" and head.ycor() > BORDER_BOTTOM:
-        head.sety(head.ycor() - 2)  # Move para baixo
-    elif head.direction == "left" and head.xcor() > BORDER_LEFT:
-        head.setx(head.xcor() - 2)  # Move para a esquerda
-    elif head.direction == "right" and head.xcor() < BORDER_RIGHT:
-        head.setx(head.xcor() + 2)  # Move para a direita
-
-    # Movimentos recebidos de outros jogadores (atualização da tela)
-    global movimentos_recebidos
-    for movimento in movimentos_recebidos:
-        device_id, direction = movimento.split(": ")
-        if direction == "up" and head.ycor() < BORDER_TOP:
-            head.sety(head.ycor() + 2)
-        elif direction == "down" and head.ycor() > BORDER_BOTTOM:
-            head.sety(head.ycor() - 2)
-        elif direction == "left" and head.xcor() > BORDER_LEFT:
-            head.setx(head.xcor() - 2)
-        elif direction == "right" and head.xcor() < BORDER_RIGHT:
-            head.setx(head.xcor() + 2)
+    if head.direction == "left":
+        x = head.xcor()
+        head.setx(x - 2)
+        pub.publish(head.id, head.xcor(), head.ycor(),head.direction,head.color()[0]) 
 
 
-# Ligações de teclado para controle do movimento
-wn.listen()  # Espera por eventos de teclado
-wn.onkeypress(go_up, "w")  # Pressionar 'w' move para cima
-wn.onkeypress(go_down, "s")  # Pressionar 's' move para baixo
-wn.onkeypress(go_left, "a")  # Pressionar 'a' move para a esquerda
-wn.onkeypress(go_right, "d")  # Pressionar 'd' move para a direita
-wn.onkeypress(close, "Escape")  # Pressionar 'Escape' fecha o jogo
+    if head.direction == "right":
+        x = head.xcor()
+        head.setx(x + 2)
+        pub.publish(head.id,  head.xcor(), head.ycor(),head.direction,head.color()[0]) 
 
-# Loop principal do jogo
-while True:
-    wn.update()  # Atualiza a tela
-    move()  # Move a bola
-    time.sleep(delay)  # Controla a velocidade do movimento
 
-wn.mainloop()  # Executa o jogo (fica esperando por eventos)
+# Keyboard bindings
+wn.listen()
+wn.onkeypress(go_up, "w")
+wn.onkeypress(go_down, "s")
+wn.onkeypress(go_left, "a")
+wn.onkeypress(go_right, "d")
+wn.onkeypress(close, "Escape")
+wn.onkeypress(stop, "Return")
+
+def main():
+    broker = "localhost"  # Endereço do broker MQTT
+    port = 1883  # Porta padrão para MQTT
+    topic = "game/move"
+
+    actual_player_id = head.id
+
+    pub = mqtt_pub.MQTTPublisher(broker,port,topic)
+    sub = mqtt_sub.MQTTSubscriber(broker,port,topic,actual_player_id)
+
+    sub_thread = threading.Thread(target=sub.start)
+    sub_thread.start()
+    
+
+    # Main game loop
+    while True:
+        wn.update()
+        move(pub)
+        time.sleep(delay)
+
+    wn.mainloop()
+
+if __name__ == '__main__':
+    main()
